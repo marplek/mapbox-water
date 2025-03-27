@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapbox GL Water Flow Effect Test</title>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <link rel='stylesheet' href='../dist/mapbox-gl.css' />
+    <style>
+        body { margin: 0; padding: 0; }
+        html, body, #map { height: 100%; }
+        
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 1;
+        }
+        
+        .control-item {
+            margin-bottom: 8px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.18"></script>
+</head>
+
+<body>
+<div id='map'></div>
+
+<script src='/dist/mapbox-gl-dev.js'></script>
+<script>
+mapboxgl.accessToken = 'pk.eyJ1Ijoic3VvbWk0OTE3IiwiYSI6ImNrODQ5dWlsaTAyMnYzZm1keTc2Ym11Y2sifQ.KEXYcfbmC_HtbAGmz8a2pg';
+
+// Add parameters
+const params = {
+    water: {
+        effect: true,
+        flowSpeed: 1.0,
+        color: '#4B7BEC',
+        opacity: 0.8,
+        size: 10.0,
+    },
+    building: {
+        visible: true,
+    },
+    terrain: {
+        enabled: false,
+        exaggeration: 1.5
+    }
+};
+
+const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/streets-v11',
+    center: [120.97, 23.97],
+    zoom: 7
+});
+
+map.on('load', function() {
+    map.addSource('mapbox-dem', {
+        'type': 'raster-dem',
+        'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
+        'tileSize': 512,
+        'maxzoom': 14
+    });
+    
+    map.addSource('water', {
+        'type': 'geojson',
+        'data': {
+            'type': 'FeatureCollection',
+            'features': [
+                {
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'Polygon',
+                        'coordinates': [[
+                            [121.5, 24.5],
+                            [122.5, 24.5],
+                            [122.5, 25.5],
+                            [121.5, 25.5],
+                            [121.5, 24.5]
+                        ]]
+                    }
+                }
+            ]
+        }
+    });
+
+    map.addLayer({
+        'id': 'water_test',
+        'type': 'fill',
+        'source': 'water',
+        'layout': {},
+        'paint': {
+            'fill-color': params.water.color,
+            'fill-opacity': params.water.opacity,
+            'fill-water-flow-speed': params.water.effect ? params.water.flowSpeed : 0,
+            'fill-water-size': params.water.size,
+        }
+    });
+
+    map.addLayer({
+        'id': 'building-3d',
+        'source': 'composite',
+        'source-layer': 'building',
+        'filter': ['==', 'extrude', 'true'],
+        'type': 'fill-extrusion',
+        'minzoom': 14,
+        'paint': {
+            'fill-extrusion-color': '#aaa',
+            'fill-extrusion-height': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                15,
+                0,
+                15.05,
+                ['*', ['get', 'height'], 1]
+            ],
+            'fill-extrusion-base': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                15,
+                0,
+                15.05,
+                ['get', 'min_height']
+            ],
+            'fill-extrusion-opacity': 1
+        }
+    });
+
+    const gui = new lil.GUI({ title: 'Water Flow Effect Control Panel' });
+    
+    const waterFolder = gui.addFolder('Water Effect');
+    waterFolder.add(params.water, 'effect').name('Enable Water Effect').onChange(function(value) {
+        if (map.getLayer('water_test')) {
+            map.setPaintProperty('water_test', 'fill-water-flow-speed', value ? params.water.flowSpeed : 0);
+        }
+    });
+    
+    waterFolder.add(params.water, 'flowSpeed', 0, 10).name('Flow Speed').onChange(function(value) {
+        if (map.getLayer('water_test') && params.water.effect) {
+            map.setPaintProperty('water_test', 'fill-water-flow-speed', value);
+        }
+    });
+    
+    waterFolder.addColor(params.water, 'color').name('Water Color').onChange(updateWaterColor);
+    waterFolder.add(params.water, 'opacity', 0, 1).name('Opacity').onChange(updateWaterColor);
+    
+    waterFolder.add(params.water, 'size', 1, 50).name('Water Size').onChange(function(value) {
+        if (map.getLayer('water_test')) {
+            map.setPaintProperty('water_test', 'fill-water-size', value);
+        }
+    });
+    const buildingFolder = gui.addFolder('Buildings');
+    buildingFolder.add(params.building, 'visible').name('Show Buildings').onChange(function(value) {
+        map.setLayoutProperty('building-3d', 'visibility', value ? 'visible' : 'none');
+    });
+    
+    waterFolder.open();
+    buildingFolder.open();
+    
+    function updateWaterColor() {
+        if (map.getLayer('water_test')) {
+            map.setPaintProperty('water_test', 'fill-color', params.water.color);
+            map.setPaintProperty('water_test', 'fill-opacity', params.water.opacity);
+        }
+    }
+    
+});
+</script>
+</body>
+</html>
